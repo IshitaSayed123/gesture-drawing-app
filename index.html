@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ramadan Hand Pen - Premium</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: linear-gradient(to bottom, #0c0a1f, #1a103d);
+      font-family: Arial;
+    }
+
+    video { display: none; }
+
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1);
+      z-index: 0;
+    }
+
+    .controls {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 2;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #F5D061;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    input[type="color"] {
+      width: 40px;
+      height: 40px;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="controls">
+  <input type="color" id="colorPicker" value="#F5D061">
+  <button onclick="saveImage()">Save</button>
+  <button onclick="autoWrite()">Auto Write</button>
+</div>
+
+<video id="vid"></video>
+<canvas id="c"></canvas>
+
+<script>
+var vid = document.getElementById('vid');
+var c = document.getElementById('c');
+var ctx = c.getContext('2d');
+var colorPicker = document.getElementById("colorPicker");
+
+var arr = [];
+var cur = [];
+var shift = false;
+var draw = false;
+var sx = null;
+var sy = null;
+
+/* 🌟 Stars */
+var stars = [];
+for (let i = 0; i < 100; i++) {
+  stars.push({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    r: Math.random() * 2
+  });
+}
+
+window.onkeydown = function(e) {
+  if (e.key === 'Shift') shift = true;
+  if (e.code === 'Space') arr = [];
+}
+
+window.onkeyup = function(e) {
+  if (e.key === 'Shift') shift = false;
+}
+
+/* 💾 Save */
+function saveImage() {
+  var link = document.createElement('a');
+  link.download = 'ramadan-art.png';
+  link.href = c.toDataURL();
+  link.click();
+}
+
+/* ✍️ Auto Write */
+function autoWrite() {
+  ctx.font = "60px cursive";
+  ctx.fillStyle = colorPicker.value;
+  ctx.fillText("Ramadan Mubarak 🌙", 200, 300);
+}
+
+function run(res) {
+
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  /* 📷 Camera */
+  ctx.drawImage(res.image, 0, 0, c.width, c.height);
+
+  /* 🌙 Dark Overlay */
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(0, 0, c.width, c.height);
+
+  /* 🌟 Stars */
+  ctx.fillStyle = "white";
+  for (let s of stars) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, 2*Math.PI);
+    ctx.fill();
+  }
+
+  /* 🌙 Crescent Moon */
+  ctx.beginPath();
+  ctx.arc(c.width - 150, 120, 50, 0, 2*Math.PI);
+  ctx.fillStyle = "#F5D061";
+  ctx.fill();
+
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(c.width - 130, 120, 50, 0, 2*Math.PI);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+
+  /* ✏️ Drawing Style */
+  ctx.shadowColor = colorPicker.value;
+  ctx.shadowBlur = 15;
+  ctx.strokeStyle = colorPicker.value;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+
+  /* Draw Stored Lines */
+  for (var i = 0; i < arr.length; i++) {
+    ctx.beginPath();
+    for (var j = 0; j < arr[i].length; j++) {
+      if (j === 0) ctx.moveTo(arr[i][j].x, arr[i][j].y);
+      else ctx.lineTo(arr[i][j].x, arr[i][j].y);
+    }
+    ctx.stroke();
+  }
+
+  if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+
+    var lm = res.multiHandLandmarks[0];
+
+    /* ✨ Finger Skeleton Lines */
+    drawConnectors(ctx, lm, HAND_CONNECTIONS, {
+      color: 'rgba(245, 208, 97, 0.6)',
+      lineWidth: 3
+    });
+
+    drawLandmarks(ctx, lm, {
+      color: '#FFFFFF',
+      radius: 3
+    });
+
+    var ind = lm[8];
+    var rx = ind.x * c.width;
+    var ry = ind.y * c.height;
+
+    if (sx == null) {
+      sx = rx;
+      sy = ry;
+    } else {
+      sx += (rx - sx) * 0.4;
+      sy += (ry - sy) * 0.4;
+    }
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, 6, 0, 2 * Math.PI);
+    ctx.fillStyle = shift ? "#FFFFFF" : colorPicker.value;
+    ctx.fill();
+
+    if (shift) {
+      if (!draw) {
+        draw = true;
+        cur = [];
+        arr.push(cur);
+      }
+      cur.push({x: sx, y: sy});
+    } else {
+      draw = false;
+    }
+
+  } else {
+    draw = false;
+    sx = null;
+  }
+}
+
+var h = new Hands({
+  locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+  }
+});
+
+h.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+h.onResults(run);
+
+var cam = new Camera(vid, {
+  onFrame: async () => { await h.send({image: vid}); },
+  width: 1280,
+  height: 720
+});
+
+cam.start();
+
+</script>
+</body>
+</html>
